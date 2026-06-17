@@ -212,6 +212,15 @@
       line-height: 1.6;
     }
 
+    #detectLocationButton {
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    #detectStatus {
+      margin: 10px 0 0;
+    }
+
     @media (min-width: 760px) {
       .app {
         max-width: 760px;
@@ -265,6 +274,8 @@
         </div>
         <label for="locationText">地点</label>
         <input id="locationText" value="桂林市象山区 · 广西壮族自治区南溪山医院">
+        <button id="detectLocationButton" class="secondary" type="button">自动识别地址</button>
+        <p class="notice" id="detectStatus">选择照片后会自动尝试读取 GPS 或识别图片中文字；识别不到不会修改地点。</p>
       </div>
 
       <div class="card">
@@ -314,6 +325,8 @@
     const ctx = canvas.getContext("2d");
     const emptyState = document.getElementById("emptyState");
     const downloadButton = document.getElementById("downloadButton");
+    const detectLocationButton = document.getElementById("detectLocationButton");
+    const detectStatus = document.getElementById("detectStatus");
 
     const controls = {
       timeText: document.getElementById("timeText"),
@@ -336,6 +349,7 @@
 
     let sourceImage = null;
     let sourceFileName = "watermark";
+    let currentFile = null;
 
     function getScale() {
       const base = Math.min(canvas.width / 1728, canvas.height / 1280);
@@ -533,9 +547,254 @@
       readout.shadowStrength.textContent = `${controls.shadowStrength.value}%`;
     }
 
+    function setDetectStatus(text) {
+      detectStatus.textContent = text;
+    }
+
+    function applyDetectedLocation(address, source) {
+      const value = normalizeAddress(address);
+      if (!value) return false;
+      controls.locationText.value = value;
+      setDetectStatus(`已根据${source}自动填写：${value}`);
+      drawWatermark();
+      return true;
+    }
+
+    function normalizeAddress(value) {
+      return String(value || "")
+        .replace(/\s+/g, "")
+        .replace(/[，,]/g, " · ")
+        .replace(/·{2,}/g, "·")
+        .replace(/[|｜]/g, "")
+        .trim()
+        .slice(0, 90);
+    }
+
+    async function autoDetectLocation(file) {
+      if (!file) {
+        imageInput.click();
+        return;
+      }
+
+      setDetectStatus("正在读取照片 GPS 信息...");
+      const gps = await readGpsFromExif(file).catch(() => null);
+      if (gps) {
+        setDetectStatus("识别到 GPS，正在转换中文地址...");
+        const gpsAddress = await reverseGeocode(gps.lat, gps.lon).catch(() => "");
+        if (applyDetectedLocation(gpsAddress, "照片 GPS")) return;
+        setDetectStatus("照片有 GPS，但没有转换出可用地址，继续识别图片文字...");
+      } else {
+        setDetectStatus("未读取到 GPS，正在识别图片文字...");
+      }
+
+      const text = await recognizeImageText(file).catch(error => {
+        setDetectStatus(`OCR 不可用或识别失败：${error.message || "未知错误"}`);
+        return "";
+      });
+      const textAddress = extractLocationFromText(text);
+      if (applyDetectedLocation(textAddress, "图片文字")) return;
+
+      setDetectStatus("未识别到可用地址，地点保持不变。");
+    }
+
+    async function readGpsFromExif(file) {
+      if (!/jpe?g$/i.test(file.name) && !/jpeg/i.test(file.type || "")) return null;
+      const buffer = await file.arrayBuffer();
+      const view = new DataView(buffer);
+      if (view.byteLength < 16 || view.getUint16(0, false) !== 0xffd8) return null;
+
+      let offset = 2;
+      while (offset + 4 < view.byteLength) {
+        if (view.getUint8(offset) !== 0xff) break;
+        const marker = view.getUint8(offset + 1);
+        const length = view.getUint16(offset + 2, false);
+        if (marker === 0xe1 && readAscii(view, offset + 4, 6) === "Exif\u0000\u0000") {
+          return parseGpsIfd(view, offset + 10);
+        }
+        offset += 2 + length;
+      }
+
+      return null;
+    }
+
+    function parseGpsIfd(view, tiffStart) {
+      const endian = view.getUint16(tiffStart, false);
+      const little = endian === 0x4949;
+      if (!little && endian !== 0x4d4d) return null;
+
+      const u16 = offset => view.getUint16(offset, little);
+      const u32 = offset => view.getUint32(offset, little);
+      const firstIfd = tiffStart + u32(tiffStart + 4);
+      const gpsOffset = findIfdValue(view, firstIfd, 0x8825, tiffStart, little);
+      if (!gpsOffset) return null;
+
+      const gpsIfd = tiffStart + gpsOffset;
+      const tags = readIfdTags(view, gpsIfd, tiffStart, little);
+      const latRef = tags[1] || "N";
+      const lat = rationalToDegrees(tags[2]);
+      const lonRef = tags[3] || "E";
+      const lon = rationalToDegrees(tags[4]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+      return {
+        lat: latRef.toUpperCase().startsWith("S") ? -lat : lat,
+        lon: lonRef.toUpperCase().startsWith("W") ? -lon : lon
+      };
+
+      function readIfdTags(data, ifd, base, isLittle) {
+        const result = {};
+        const count = data.getUint16(ifd, isLittle);
+        for (let i = 0; i < count; i += 1) {
+          const entry = ifd + 2 + i * 12;
+          const tag = data.getUint16(entry, isLittle);
+          const type = data.getUint16(entry + 2, isLittle);
+          const itemCount = data.getUint32(entry + 4, isLittle);
+          if (type === 2) {
+            const valueOffset = itemCount <= 4 ? entry + 8 : base + data.getUint32(entry + 8, isLittle);
+            result[tag] = readAscii(data, valueOffset, itemCount).replace(/\0/g, "");
+          }
+          if (type === 5) {
+            const valueOffset = base + data.getUint32(entry + 8, isLittle);
+            result[tag] = Array.from({ length: itemCount }, (_, index) => {
+              const pos = valueOffset + index * 8;
+              const denominator = data.getUint32(pos + 4, isLittle) || 1;
+              return data.getUint32(pos, isLittle) / denominator;
+            });
+          }
+        }
+        return result;
+      }
+
+      function findIfdValue(data, ifd, targetTag, base, isLittle) {
+        const count = data.getUint16(ifd, isLittle);
+        for (let i = 0; i < count; i += 1) {
+          const entry = ifd + 2 + i * 12;
+          if (data.getUint16(entry, isLittle) === targetTag) {
+            return data.getUint32(entry + 8, isLittle);
+          }
+        }
+        return 0;
+      }
+    }
+
+    function readAscii(view, offset, length) {
+      let value = "";
+      for (let i = 0; i < length && offset + i < view.byteLength; i += 1) {
+        value += String.fromCharCode(view.getUint8(offset + i));
+      }
+      return value;
+    }
+
+    function rationalToDegrees(values) {
+      if (!values || values.length < 3) return NaN;
+      return values[0] + values[1] / 60 + values[2] / 3600;
+    }
+
+    async function reverseGeocode(lat, lon) {
+      const urls = [
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&accept-language=zh-CN`,
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&localityLanguage=zh`
+      ];
+
+      for (const url of urls) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) continue;
+          const data = await response.json();
+          const address = data.display_name || buildAddressFromBigDataCloud(data);
+          if (address) return address;
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+
+      return "";
+    }
+
+    function buildAddressFromBigDataCloud(data) {
+      const parts = [
+        data.principalSubdivision,
+        data.city,
+        data.locality,
+        data.localityInfo && data.localityInfo.informative && data.localityInfo.informative[0] && data.localityInfo.informative[0].name
+      ].filter(Boolean);
+      return [...new Set(parts)].join(" · ");
+    }
+
+    let tesseractLoader = null;
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) {
+          existing.addEventListener("load", resolve, { once: true });
+          existing.addEventListener("error", reject, { once: true });
+          if (window.Tesseract) resolve();
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("OCR 组件加载失败"));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function recognizeImageText(file) {
+      tesseractLoader ||= loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
+      await tesseractLoader;
+      if (!window.Tesseract) throw new Error("OCR 组件未加载");
+
+      const result = await Tesseract.recognize(file, "chi_sim+eng", {
+        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
+        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core.wasm.js",
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
+        logger: message => {
+          if (message.status === "recognizing text") {
+            setDetectStatus(`正在识别图片文字 ${Math.round((message.progress || 0) * 100)}%...`);
+          }
+        }
+      });
+      return result && result.data ? result.data.text || "" : "";
+    }
+
+    function extractLocationFromText(text) {
+      if (!text) return "";
+
+      const keyword = /(医院|卫生院|卫生服务中心|门诊|诊所|医科|大学|学校|酒店|大厦|广场|机场|车站|公园|景区|公司|中心)/;
+      const blacklist = /(水印相机|星期|晴|阴|雨|雪|°C|℃|\d{1,2}:\d{2}|\d{4}[-/.]\d{1,2}[-/.]\d{1,2})/;
+      const lines = text
+        .split(/\r?\n+/)
+        .map(line => line.replace(/\s+/g, "").replace(/[|｜]/g, "").replace(/[^\u4e00-\u9fa5A-Za-z0-9·\-()（）]/g, ""))
+        .map(line => line.replace(/^.*?(地址|地点|位置)[:：]?/, ""))
+        .filter(line => line.length >= 3 && line.length <= 60);
+
+      let best = "";
+      let bestScore = 0;
+      for (const line of lines) {
+        if (!keyword.test(line) || blacklist.test(line)) continue;
+        const chineseCount = (line.match(/[\u4e00-\u9fa5]/g) || []).length;
+        if (chineseCount < 3) continue;
+        let score = chineseCount;
+        if (/医院|卫生院|卫生服务中心/.test(line)) score += 50;
+        if (/省|市|区|县|镇|街|路/.test(line)) score += 15;
+        if (line.length > 8 && line.length < 40) score += 10;
+        if (score > bestScore) {
+          best = line;
+          bestScore = score;
+        }
+      }
+
+      return bestScore >= 30 ? best : "";
+    }
+
     imageInput.addEventListener("change", event => {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
+      currentFile = file;
+      setDetectStatus("已选择照片，准备自动识别地址...");
 
       const reader = new FileReader();
       reader.onload = () => {
@@ -546,10 +805,15 @@
           emptyState.hidden = true;
           canvas.hidden = false;
           drawWatermark();
+          autoDetectLocation(file);
         };
         img.src = reader.result;
       };
       reader.readAsDataURL(file);
+    });
+
+    detectLocationButton.addEventListener("click", () => {
+      autoDetectLocation(currentFile);
     });
 
     Object.values(controls).forEach(control => {

@@ -7,6 +7,8 @@
 1. 上传到公网网站，例如 GitHub Pages、Cloudflare Pages、Vercel、Netlify、宝塔/Nginx 网站目录、阿里云 OSS、腾讯云 COS。
 2. 推荐使用 HTTPS。HTTPS 下手机可以添加到主屏幕，并支持离线缓存。
 3. 手机打开网址后，照片处理在手机浏览器本地完成，不会上传照片。
+4. 自动识别地址会先读取照片 EXIF GPS；如果有 GPS，会调用在线反查地址接口转换成中文地址。
+5. 如果没有 GPS，会下载 OCR 组件并在浏览器本机识别图片中文字，识别不到就不修改地点。
 
 最简单部署方式：
 1. 把 index.html、manifest.json、sw.js、icon-192.png、icon-512.png 全部上传到网站根目录。
