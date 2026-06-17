@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1267e2">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>手机水印相机</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f5f7;
+      --panel: #ffffff;
+      --text: #151b23;
+      --muted: #64707d;
+      --line: #d7dde4;
+      --blue: #1267e2;
+      --blue-dark: #0d54bb;
+      --yellow: #e0bd31;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", Arial, sans-serif;
+    }
+
+    .app {
+      min-height: 100vh;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(10px);
+      padding: 12px 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .sub {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .preview {
+      padding: 12px;
+    }
+
+    .canvas-shell {
+      display: grid;
+      place-items: center;
+      min-height: 280px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #dde4ec;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #cfd7e0;
+    }
+
+    .empty {
+      padding: 28px 18px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .controls {
+      padding: 0 12px 96px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      margin: 0 0 10px;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    label {
+      display: block;
+      margin: 10px 0 5px;
+      color: #293441;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid #c7d0da;
+      border-radius: 8px;
+      background: #fff;
+      padding: 8px 10px;
+      color: var(--text);
+      font: inherit;
+      font-size: 16px;
+    }
+
+    input[type="range"] {
+      padding: 0;
+    }
+
+    input[readonly] {
+      color: var(--muted);
+      background: #f7f8fa;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      border-top: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.97);
+      backdrop-filter: blur(12px);
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    }
+
+    button,
+    .file-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--blue);
+      color: #fff;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 800;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    button:active,
+    .file-button:active {
+      background: var(--blue-dark);
+      transform: translateY(1px);
+    }
+
+    button.secondary,
+    .file-button.secondary {
+      border: 1px solid #c7d0da;
+      background: #fff;
+      color: #26313c;
+    }
+
+    .file-input {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .notice {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    @media (min-width: 760px) {
+      .app {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+
+      .bar {
+        left: 50%;
+        width: 760px;
+        transform: translateX(-50%);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>手机水印相机</h1>
+      <div class="sub">上传或拍摄照片，填写信息后导出带水印图片。日期会自动识别星期。</div>
+    </header>
+
+    <section class="preview">
+      <div class="canvas-shell">
+        <div class="empty" id="emptyState">点击底部“选择照片”开始。<br>处理只在当前设备浏览器里完成。</div>
+        <canvas id="canvas" hidden></canvas>
+      </div>
+    </section>
+
+    <section class="controls">
+      <div class="card">
+        <p class="card-title">照片信息</p>
+        <div class="grid">
+          <div>
+            <label for="timeText">时间</label>
+            <input id="timeText" type="time" value="11:42">
+          </div>
+          <div>
+            <label for="dateText">日期</label>
+            <input id="dateText" type="date" value="2026-06-17">
+          </div>
+        </div>
+        <div class="grid">
+          <div>
+            <label for="weekText">星期</label>
+            <input id="weekText" value="星期三" readonly>
+          </div>
+          <div>
+            <label for="weatherText">天气温度</label>
+            <input id="weatherText" value="晴 32°C">
+          </div>
+        </div>
+        <label for="locationText">地点</label>
+        <input id="locationText" value="桂林市象山区 · 广西壮族自治区南溪山医院">
+      </div>
+
+      <div class="card">
+        <p class="card-title">水印样式</p>
+        <label for="fontScale">字号比例</label>
+        <input id="fontScale" type="range" min="70" max="130" value="100">
+        <div class="metric"><span>小</span><span id="fontScaleValue">100%</span><span>大</span></div>
+
+        <label for="marginScale">边距比例</label>
+        <input id="marginScale" type="range" min="70" max="150" value="100">
+        <div class="metric"><span>紧凑</span><span id="marginScaleValue">100%</span><span>宽松</span></div>
+
+        <label for="shadowStrength">阴影强度</label>
+        <input id="shadowStrength" type="range" min="0" max="100" value="58">
+        <div class="metric"><span>弱</span><span id="shadowStrengthValue">58%</span><span>强</span></div>
+      </div>
+
+      <div class="card">
+        <p class="card-title">导出设置</p>
+        <div class="grid">
+          <div>
+            <label for="formatSelect">格式</label>
+            <select id="formatSelect">
+              <option value="image/jpeg">JPG</option>
+              <option value="image/png">PNG</option>
+            </select>
+          </div>
+          <div>
+            <label for="qualityInput">质量</label>
+            <input id="qualityInput" type="number" min="60" max="100" value="95">
+          </div>
+        </div>
+        <p class="notice">水印内容由本地手动填写。右下角显示相机图标和“水印相机”。</p>
+      </div>
+    </section>
+
+    <input id="imageInput" class="file-input" type="file" accept="image/*">
+    <div class="bar">
+      <label class="file-button secondary" for="imageInput">选择照片</label>
+      <button id="downloadButton" type="button">导出图片</button>
+    </div>
+  </div>
+
+  <script>
+    const imageInput = document.getElementById("imageInput");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const emptyState = document.getElementById("emptyState");
+    const downloadButton = document.getElementById("downloadButton");
+
+    const controls = {
+      timeText: document.getElementById("timeText"),
+      dateText: document.getElementById("dateText"),
+      weekText: document.getElementById("weekText"),
+      weatherText: document.getElementById("weatherText"),
+      locationText: document.getElementById("locationText"),
+      fontScale: document.getElementById("fontScale"),
+      marginScale: document.getElementById("marginScale"),
+      shadowStrength: document.getElementById("shadowStrength"),
+      formatSelect: document.getElementById("formatSelect"),
+      qualityInput: document.getElementById("qualityInput")
+    };
+
+    const readout = {
+      fontScale: document.getElementById("fontScaleValue"),
+      marginScale: document.getElementById("marginScaleValue"),
+      shadowStrength: document.getElementById("shadowStrengthValue")
+    };
+
+    let sourceImage = null;
+    let sourceFileName = "watermark";
+
+    function getScale() {
+      const base = Math.min(canvas.width / 1728, canvas.height / 1280);
+      return Math.max(0.35, base) * (Number(controls.fontScale.value) / 100);
+    }
+
+    function getMarginScale() {
+      return Number(controls.marginScale.value) / 100;
+    }
+
+    function drawText(text, x, y, size, weight = 700, align = "left") {
+      ctx.save();
+      ctx.font = `${weight} ${size}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      ctx.textAlign = align;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = `rgba(0, 0, 0, ${Number(controls.shadowStrength.value) / 100})`;
+      ctx.shadowBlur = Math.max(4, size * 0.12);
+      ctx.shadowOffsetX = Math.max(1, size * 0.025);
+      ctx.shadowOffsetY = Math.max(1, size * 0.035);
+      ctx.fillText(text, x, y);
+      ctx.restore();
+    }
+
+    function drawCameraLabel(rightX, bottomY, size) {
+      const text = "水印相机";
+      const iconSize = 34 * (size / 32);
+      const gap = 10 * (size / 32);
+
+      ctx.save();
+      ctx.font = `800 ${size}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const metrics = ctx.measureText(text);
+      const ascent = metrics.actualBoundingBoxAscent || size * 0.82;
+      const descent = metrics.actualBoundingBoxDescent || size * 0.18;
+      const textHeight = ascent + descent;
+      const groupHeight = Math.max(iconSize, textHeight);
+      const centerY = bottomY - groupHeight / 2;
+      const textX = rightX - metrics.width;
+      const baseline = centerY + (ascent - descent) / 2;
+      ctx.restore();
+
+      drawCameraIcon(textX - gap - iconSize, centerY, iconSize);
+      drawText(text, textX, baseline, size, 800, "left");
+    }
+
+    function drawLocationPin(x, baseline, size) {
+      const cx = x + size * 0.42;
+      const cy = baseline - size * 0.58;
+
+      ctx.save();
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = `rgba(0, 0, 0, ${Number(controls.shadowStrength.value) / 100})`;
+      ctx.shadowBlur = Math.max(4, size * 0.12);
+      ctx.shadowOffsetX = Math.max(1, size * 0.025);
+      ctx.shadowOffsetY = Math.max(1, size * 0.035);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + size * 0.5);
+      ctx.bezierCurveTo(cx - size * 0.45, cy + size * 0.1, cx - size * 0.42, cy - size * 0.42, cx, cy - size * 0.42);
+      ctx.bezierCurveTo(cx + size * 0.42, cy - size * 0.42, cx + size * 0.45, cy + size * 0.1, cx, cy + size * 0.5);
+      ctx.fill();
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.arc(cx, cy - size * 0.06, size * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawCameraIcon(x, centerY, size) {
+      const y = centerY - size * 0.48;
+      const radius = size * 0.12;
+
+      ctx.save();
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = `rgba(0, 0, 0, ${Number(controls.shadowStrength.value) / 100})`;
+      ctx.shadowBlur = Math.max(4, size * 0.12);
+      ctx.shadowOffsetX = Math.max(1, size * 0.025);
+      ctx.shadowOffsetY = Math.max(1, size * 0.035);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y + size * 0.22);
+      ctx.lineTo(x + size * 0.3, y + size * 0.22);
+      ctx.lineTo(x + size * 0.4, y + size * 0.08);
+      ctx.lineTo(x + size * 0.62, y + size * 0.08);
+      ctx.lineTo(x + size * 0.72, y + size * 0.22);
+      ctx.lineTo(x + size - radius, y + size * 0.22);
+      ctx.quadraticCurveTo(x + size, y + size * 0.22, x + size, y + size * 0.22 + radius);
+      ctx.lineTo(x + size, y + size * 0.88 - radius);
+      ctx.quadraticCurveTo(x + size, y + size * 0.88, x + size - radius, y + size * 0.88);
+      ctx.lineTo(x + radius, y + size * 0.88);
+      ctx.quadraticCurveTo(x, y + size * 0.88, x, y + size * 0.88 - radius);
+      ctx.lineTo(x, y + size * 0.22 + radius);
+      ctx.quadraticCurveTo(x, y + size * 0.22, x + radius, y + size * 0.22);
+      ctx.fill();
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.arc(x + size * 0.5, y + size * 0.56, size * 0.19, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x + size * 0.82, y + size * 0.36, size * 0.045, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function updateWeekFromDate() {
+      const match = controls.dateText.value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (!match) return;
+
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      const date = new Date(year, month - 1, day);
+      if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return;
+
+      const weekNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+      controls.weekText.value = weekNames[date.getDay()];
+    }
+
+    function setOutputCanvasSize(img) {
+      const maxLongEdge = 2600;
+      const ratio = Math.min(1, maxLongEdge / Math.max(img.naturalWidth, img.naturalHeight));
+      canvas.width = Math.round(img.naturalWidth * ratio);
+      canvas.height = Math.round(img.naturalHeight * ratio);
+    }
+
+    function drawWatermark() {
+      if (!sourceImage) return;
+
+      setOutputCanvasSize(sourceImage);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+
+      const s = getScale();
+      const m = getMarginScale();
+      const x = 42 * s * m;
+      const bottom = 50 * s * m;
+      const locationY = canvas.height - bottom;
+
+      const timeSize = 94 * s;
+      const dateSize = 35 * s;
+      const metaSize = 33 * s;
+      const locationSize = 34 * s;
+      const rightTitleSize = 32 * s;
+
+      const timeText = controls.timeText.value.trim() || "11:42";
+      const dateText = controls.dateText.value.trim() || "2026-06-17";
+      const timeBaseline = locationY - 78 * s;
+      ctx.save();
+      ctx.font = `800 ${timeSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const timeMetrics = ctx.measureText(timeText);
+      const timeWidth = timeMetrics.width;
+      const timeAscent = timeMetrics.actualBoundingBoxAscent || timeSize * 0.82;
+      const timeDescent = timeMetrics.actualBoundingBoxDescent || timeSize * 0.18;
+      const timeTop = timeBaseline - timeAscent;
+      const timeBottom = timeBaseline + timeDescent;
+      ctx.restore();
+
+      drawText(timeText, x, timeBaseline, timeSize, 800);
+
+      const lineX = x + timeWidth + 22 * s;
+      const lineTop = timeTop;
+      const lineHeight = timeBottom - timeTop;
+      ctx.save();
+      ctx.fillStyle = "#e3bd31";
+      ctx.shadowColor = "rgba(0, 0, 0, 0.28)";
+      ctx.shadowBlur = 6 * s;
+      ctx.fillRect(lineX, lineTop, Math.max(3, 5 * s), lineHeight);
+      ctx.restore();
+
+      const infoX = lineX + 30 * s;
+      ctx.save();
+      ctx.font = `700 ${dateSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const dateMetrics = ctx.measureText(dateText);
+      const dateAscent = dateMetrics.actualBoundingBoxAscent || dateSize * 0.82;
+      ctx.restore();
+      drawText(dateText, infoX, timeTop + dateAscent, dateSize, 700);
+      const meta = `${controls.weekText.value.trim() || "星期三"}  ${controls.weatherText.value.trim() || "晴 32°C"}`;
+      ctx.save();
+      ctx.font = `700 ${metaSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const metaMetrics = ctx.measureText(meta);
+      const metaDescent = metaMetrics.actualBoundingBoxDescent || metaSize * 0.18;
+      ctx.restore();
+      drawText(meta, infoX, timeBottom - metaDescent, metaSize, 700);
+
+      const pinSize = 31 * s;
+      drawLocationPin(x, locationY, pinSize);
+      drawText(controls.locationText.value.trim() || "桂林市象山区 · 广西壮族自治区南溪山医院", x + 35 * s, locationY, locationSize, 700);
+
+      const rightX = canvas.width - 14 * s * m;
+      const rightBottom = canvas.height - 48 * s * m;
+      drawCameraLabel(rightX, rightBottom, rightTitleSize);
+    }
+
+    function updateReadouts() {
+      readout.fontScale.textContent = `${controls.fontScale.value}%`;
+      readout.marginScale.textContent = `${controls.marginScale.value}%`;
+      readout.shadowStrength.textContent = `${controls.shadowStrength.value}%`;
+    }
+
+    imageInput.addEventListener("change", event => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          sourceImage = img;
+          sourceFileName = file.name.replace(/\.[^.]+$/, "") || "watermark";
+          emptyState.hidden = true;
+          canvas.hidden = false;
+          drawWatermark();
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    Object.values(controls).forEach(control => {
+      control.addEventListener("input", () => {
+        if (control === controls.dateText) updateWeekFromDate();
+        updateReadouts();
+        drawWatermark();
+      });
+    });
+
+    downloadButton.addEventListener("click", () => {
+      if (!sourceImage) {
+        imageInput.click();
+        return;
+      }
+
+      drawWatermark();
+      const type = controls.formatSelect.value;
+      const ext = type === "image/png" ? "png" : "jpg";
+      const quality = Math.min(1, Math.max(0.6, Number(controls.qualityInput.value) / 100 || 0.95));
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `${sourceFileName}-watermark.${ext}`;
+        link.href = url;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+      }, type, quality);
+    });
+
+    updateWeekFromDate();
+    updateReadouts();
+  </script>
+  <script>
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
