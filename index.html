@@ -351,6 +351,14 @@
     let sourceFileName = "watermark";
     let currentFile = null;
 
+    const cameraIconImage = new Image();
+    let cameraIconReady = false;
+    cameraIconImage.onload = () => {
+      cameraIconReady = true;
+      drawWatermark();
+    };
+    cameraIconImage.src = "camera-icon-template.png";
+
     function getScale() {
       const base = Math.min(canvas.width / 1728, canvas.height / 1280);
       return Math.max(0.35, base) * (Number(controls.fontScale.value) / 100);
@@ -376,22 +384,24 @@
 
     function drawCameraLabel(rightX, bottomY, size) {
       const text = "水印相机";
-      const iconSize = 34 * (size / 32);
-      const gap = 10 * (size / 32);
+      const fontFamily = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif';
+      const scale = size / 32;
 
       ctx.save();
-      ctx.font = `800 ${size}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      ctx.font = `800 ${size}px ${fontFamily}`;
       const metrics = ctx.measureText(text);
       const ascent = metrics.actualBoundingBoxAscent || size * 0.82;
       const descent = metrics.actualBoundingBoxDescent || size * 0.18;
       const textHeight = ascent + descent;
-      const groupHeight = Math.max(iconSize, textHeight);
-      const centerY = bottomY - groupHeight / 2;
+      const iconVisibleRatio = 0.982;
+      const iconSize = textHeight / iconVisibleRatio;
+      const gap = 11 * scale;
       const textX = rightX - metrics.width;
-      const baseline = centerY + (ascent - descent) / 2;
+      const baseline = bottomY - descent;
+      const iconCenterY = bottomY - textHeight / 2;
       ctx.restore();
 
-      drawCameraIcon(textX - gap - iconSize, centerY, iconSize);
+      drawCameraIcon(textX - gap - iconSize, iconCenterY, iconSize);
       drawText(text, textX, baseline, size, 800, "left");
     }
 
@@ -418,38 +428,61 @@
     }
 
     function drawCameraIcon(x, centerY, size) {
-      const y = centerY - size * 0.48;
-      const radius = size * 0.12;
+      const y = centerY - size / 2;
+      const shadowAlpha = Number(controls.shadowStrength.value) / 100;
 
+      if (cameraIconReady) {
+        ctx.save();
+        ctx.shadowColor = `rgba(0, 0, 0, ${shadowAlpha})`;
+        ctx.shadowBlur = Math.max(4, size * 0.12);
+        ctx.shadowOffsetX = Math.max(1, size * 0.04);
+        ctx.shadowOffsetY = Math.max(1, size * 0.05);
+        ctx.drawImage(cameraIconImage, x, y, size, size);
+        ctx.restore();
+        return;
+      }
+
+      const radius = size * 0.18;
       ctx.save();
       ctx.fillStyle = "#ffffff";
-      ctx.shadowColor = `rgba(0, 0, 0, ${Number(controls.shadowStrength.value) / 100})`;
+      ctx.shadowColor = `rgba(0, 0, 0, ${shadowAlpha})`;
       ctx.shadowBlur = Math.max(4, size * 0.12);
-      ctx.shadowOffsetX = Math.max(1, size * 0.025);
-      ctx.shadowOffsetY = Math.max(1, size * 0.035);
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y + size * 0.22);
-      ctx.lineTo(x + size * 0.3, y + size * 0.22);
-      ctx.lineTo(x + size * 0.4, y + size * 0.08);
-      ctx.lineTo(x + size * 0.62, y + size * 0.08);
-      ctx.lineTo(x + size * 0.72, y + size * 0.22);
-      ctx.lineTo(x + size - radius, y + size * 0.22);
-      ctx.quadraticCurveTo(x + size, y + size * 0.22, x + size, y + size * 0.22 + radius);
-      ctx.lineTo(x + size, y + size * 0.88 - radius);
-      ctx.quadraticCurveTo(x + size, y + size * 0.88, x + size - radius, y + size * 0.88);
-      ctx.lineTo(x + radius, y + size * 0.88);
-      ctx.quadraticCurveTo(x, y + size * 0.88, x, y + size * 0.88 - radius);
-      ctx.lineTo(x, y + size * 0.22 + radius);
-      ctx.quadraticCurveTo(x, y + size * 0.22, x + radius, y + size * 0.22);
+      ctx.shadowOffsetX = Math.max(1, size * 0.04);
+      ctx.shadowOffsetY = Math.max(1, size * 0.05);
+      roundRectPath(ctx, x + size * 0.04, y + size * 0.07, size * 0.92, size * 0.86, radius);
       ctx.fill();
+
       ctx.globalCompositeOperation = "destination-out";
       ctx.beginPath();
-      ctx.arc(x + size * 0.5, y + size * 0.56, size * 0.19, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.51, y + size * 0.44, size * 0.205, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(x + size * 0.82, y + size * 0.36, size * 0.045, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.79, y + size * 0.27, size * 0.078, 0, Math.PI * 2);
+      ctx.fill();
+      roundRectPath(ctx, x + size * 0.10, y + size * 0.56, size * 0.80, size * 0.32, size * 0.078);
+      ctx.fill();
+
+      ctx.globalCompositeOperation = "source-over";
+      roundRectPath(ctx, x + size * 0.18, y + size * 0.66, size * 0.16, size * 0.078, size * 0.039);
+      ctx.fill();
+      roundRectPath(ctx, x + size * 0.18, y + size * 0.765, size * 0.38, size * 0.078, size * 0.039);
       ctx.fill();
       ctx.restore();
+    }
+
+    function roundRectPath(context, x, y, width, height, radius) {
+      const r = Math.min(radius, width / 2, height / 2);
+      context.beginPath();
+      context.moveTo(x + r, y);
+      context.lineTo(x + width - r, y);
+      context.quadraticCurveTo(x + width, y, x + width, y + r);
+      context.lineTo(x + width, y + height - r);
+      context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+      context.lineTo(x + r, y + height);
+      context.quadraticCurveTo(x, y + height, x, y + height - r);
+      context.lineTo(x, y + r);
+      context.quadraticCurveTo(x, y, x + r, y);
+      context.closePath();
     }
 
     function updateWeekFromDate() {
