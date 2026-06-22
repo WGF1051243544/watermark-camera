@@ -280,6 +280,12 @@
 
       <div class="card">
         <p class="card-title">水印样式</p>
+        <label for="templateSelect">水印模板</label>
+        <select id="templateSelect">
+          <option value="classic">左下角经典模板</option>
+          <option value="center">居中简洁模板</option>
+        </select>
+
         <label for="fontScale">字号比例</label>
         <input id="fontScale" type="range" min="70" max="130" value="100">
         <div class="metric"><span>小</span><span id="fontScaleValue">100%</span><span>大</span></div>
@@ -334,6 +340,7 @@
       weekText: document.getElementById("weekText"),
       weatherText: document.getElementById("weatherText"),
       locationText: document.getElementById("locationText"),
+      templateSelect: document.getElementById("templateSelect"),
       fontScale: document.getElementById("fontScale"),
       marginScale: document.getElementById("marginScale"),
       shadowStrength: document.getElementById("shadowStrength"),
@@ -427,6 +434,30 @@
       ctx.restore();
     }
 
+    function drawRedLocationPin(x, centerY, size) {
+      const cx = x + size * 0.5;
+      const cy = centerY - size * 0.12;
+      const shadowAlpha = Number(controls.shadowStrength.value) / 100;
+
+      ctx.save();
+      ctx.fillStyle = "#e12423";
+      ctx.shadowColor = `rgba(0, 0, 0, ${shadowAlpha})`;
+      ctx.shadowBlur = Math.max(4, size * 0.16);
+      ctx.shadowOffsetX = Math.max(1, size * 0.035);
+      ctx.shadowOffsetY = Math.max(1, size * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + size * 0.64);
+      ctx.bezierCurveTo(cx - size * 0.42, cy + size * 0.16, cx - size * 0.4, cy - size * 0.34, cx, cy - size * 0.34);
+      ctx.bezierCurveTo(cx + size * 0.4, cy - size * 0.34, cx + size * 0.42, cy + size * 0.16, cx, cy + size * 0.64);
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.fillStyle = "rgba(255, 105, 105, 0.74)";
+      ctx.beginPath();
+      ctx.arc(cx, cy - size * 0.14, size * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     function drawCameraIcon(x, centerY, size) {
       const y = centerY - size / 2;
       const shadowAlpha = Number(controls.shadowStrength.value) / 100;
@@ -506,12 +537,79 @@
       canvas.height = Math.round(img.naturalHeight * ratio);
     }
 
+    function drawCenteredInfoRow(dateText, weekTextValue, location, fontSize, centerX, topY, scale) {
+      const dateValue = dateText || "2026-06-17";
+      const weekValue = weekTextValue || "\u661f\u671f\u4e09";
+      const locationValue = location || "\u003f\u003f\u003f\u003f\u003f\u003f\u0020\u003f\u0020\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f";
+      const font = `400 ${fontSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", Arial, sans-serif`;
+      ctx.save();
+      ctx.font = font;
+      const dateMetrics = ctx.measureText(dateValue);
+      const weekMetrics = ctx.measureText(weekValue);
+      const locationMetrics = ctx.measureText(locationValue);
+      const ascent = Math.max(
+        dateMetrics.actualBoundingBoxAscent || fontSize * 0.82,
+        weekMetrics.actualBoundingBoxAscent || fontSize * 0.82,
+        locationMetrics.actualBoundingBoxAscent || fontSize * 0.82
+      );
+      const descent = Math.max(
+        dateMetrics.actualBoundingBoxDescent || fontSize * 0.18,
+        weekMetrics.actualBoundingBoxDescent || fontSize * 0.18,
+        locationMetrics.actualBoundingBoxDescent || fontSize * 0.18
+      );
+      const textHeight = ascent + descent;
+      const gap = 22 * scale;
+      const pinSize = 30 * scale;
+      const totalWidth = dateMetrics.width + gap + weekMetrics.width + gap + pinSize + 8 * scale + locationMetrics.width;
+      ctx.restore();
+
+      let x = centerX - totalWidth / 2;
+      const baseline = topY + ascent;
+      drawText(dateValue, x, baseline, fontSize, 400, "left");
+      x += dateMetrics.width + gap;
+      drawText(weekValue, x, baseline, fontSize, 400, "left");
+      x += weekMetrics.width + gap;
+      drawRedLocationPin(x, topY + textHeight / 2, pinSize);
+      x += pinSize + 8 * scale;
+      drawText(locationValue, x, baseline, fontSize, 400, "left");
+    }
+
+    function drawCenteredWatermark() {
+      const s = Math.max(0.35, Math.min(canvas.width / 1536, canvas.height / 1152)) * (Number(controls.fontScale.value) / 100);
+      const m = getMarginScale();
+      const timeText = controls.timeText.value.trim() || "10:20";
+      const dateText = controls.dateText.value.trim() || "2026-06-18";
+      const weekTextValue = controls.weekText.value.trim() || "\u661f\u671f\u4e09";
+      const locationValue = controls.locationText.value.trim() || "\u003f\u003f\u003f\u003f\u003f\u003f\u0020\u003f\u0020\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f\u003f";
+      const timeSize = 118 * s;
+      const infoSize = 40 * s;
+      const cameraSize = 48 * s;
+      const timeTop = canvas.height - 342 * s * m;
+
+      ctx.save();
+      ctx.font = `400 ${timeSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", Arial, sans-serif`;
+      const timeMetrics = ctx.measureText(timeText);
+      const timeAscent = timeMetrics.actualBoundingBoxAscent || timeSize * 0.82;
+      const timeDescent = timeMetrics.actualBoundingBoxDescent || timeSize * 0.18;
+      const timeHeight = timeAscent + timeDescent;
+      ctx.restore();
+
+      drawText(timeText, (canvas.width - timeMetrics.width) / 2, timeTop + timeAscent, timeSize, 400, "left");
+      drawCenteredInfoRow(dateText, weekTextValue, locationValue, infoSize, canvas.width / 2, timeTop + timeHeight + 36 * s, s);
+      drawCameraLabel(canvas.width - 48 * s * m, canvas.height - 74 * s * m, cameraSize);
+    }
+
     function drawWatermark() {
       if (!sourceImage) return;
 
       setOutputCanvasSize(sourceImage);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+
+      if (controls.templateSelect && controls.templateSelect.value === "center") {
+        drawCenteredWatermark();
+        return;
+      }
 
       const s = getScale();
       const m = getMarginScale();
@@ -850,11 +948,13 @@
     });
 
     Object.values(controls).forEach(control => {
-      control.addEventListener("input", () => {
+      const handleControlChange = () => {
         if (control === controls.dateText) updateWeekFromDate();
         updateReadouts();
         drawWatermark();
-      });
+      };
+      control.addEventListener("input", handleControlChange);
+      control.addEventListener("change", handleControlChange);
     });
 
     downloadButton.addEventListener("click", () => {

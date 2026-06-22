@@ -1,4 +1,4 @@
-const CACHE_NAME = "watermark-camera-public-v2";
+const CACHE_NAME = "watermark-camera-public-v3";
 const ASSETS = [
   "./",
   "./index.html",
