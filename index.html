@@ -269,7 +269,7 @@
           </div>
           <div>
             <label for="weatherText">天气温度</label>
-            <input id="weatherText" value="晴 32°C">
+            <input id="weatherText" type="text" value="晴 32°C" autocomplete="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
         <label for="locationText">地点</label>
@@ -992,6 +992,15 @@
       control.addEventListener("change", handleControlChange);
     });
 
+    controls.weatherText.readOnly = false;
+    controls.weatherText.disabled = false;
+    ["keyup", "blur", "compositionend"].forEach(eventName => {
+      controls.weatherText.addEventListener(eventName, () => {
+        updateReadouts();
+        drawWatermark();
+      });
+    });
+
     downloadButton.addEventListener("click", () => {
       if (!sourceImage) {
         imageInput.click();
@@ -1018,8 +1027,23 @@
   </script>
   <script>
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      let serviceWorkerReloaded = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (serviceWorkerReloaded) return;
+        serviceWorkerReloaded = true;
+        location.reload();
+      });
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js").catch(() => {});
+        if ("caches" in window) {
+          caches.keys().then(keys => Promise.all(
+            keys
+              .filter(key => key.indexOf("watermark-camera-public-") === 0 && key !== "watermark-camera-public-v8")
+              .map(key => caches.delete(key))
+          )).catch(() => {});
+        }
+        navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+          .then(registration => registration.update())
+          .catch(() => {});
       });
     }
   </script>
