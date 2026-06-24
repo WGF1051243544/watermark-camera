@@ -441,12 +441,6 @@
     }
 
     function drawLocationPin(x, baseline, size) {
-      const height = size;
-      const width = getLocationPinWidth(height);
-      if (drawLocationPinImage(x, baseline - height * 0.98, width, height)) {
-        return;
-      }
-
       const cx = x + size * 0.42;
       const cy = baseline - size * 0.58;
 
@@ -704,10 +698,9 @@
       ctx.restore();
       drawText(meta, infoX, timeBottom - metaDescent, metaSize, 700);
 
-      const pinHeight = locationSize * 0.72;
-      const pinWidth = getLocationPinWidth(pinHeight);
-      drawLocationPin(x, locationY, pinHeight);
-      drawText(controls.locationText.value.trim() || "桂林市象山区 · 广西壮族自治区南溪山医院", x + pinWidth + 12 * s, locationY, locationSize, 700);
+      const pinSize = 31 * s;
+      drawLocationPin(x, locationY, pinSize);
+      drawText(controls.locationText.value.trim() || "桂林市象山区 · 广西壮族自治区南溪山医院", x + 35 * s, locationY, locationSize, 700);
 
       const rightX = canvas.width - 14 * s * m;
       const rightBottom = canvas.height - 48 * s * m;
