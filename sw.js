@@ -1,9 +1,10 @@
-const CACHE_NAME = "watermark-camera-public-v3";
+const CACHE_NAME = "watermark-camera-public-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
   "./camera-icon-template.png",
+  "./location-pin-template.png",
   "./icon-192.png",
   "./icon-512.png"
 ];

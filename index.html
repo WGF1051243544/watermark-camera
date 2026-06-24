@@ -366,6 +366,14 @@
     };
     cameraIconImage.src = "camera-icon-template.png";
 
+    const locationPinImage = new Image();
+    let locationPinReady = false;
+    locationPinImage.onload = () => {
+      locationPinReady = true;
+      drawWatermark();
+    };
+    locationPinImage.src = "location-pin-template.png";
+
     function getScale() {
       const base = Math.min(canvas.width / 1728, canvas.height / 1280);
       return Math.max(0.35, base) * (Number(controls.fontScale.value) / 100);
@@ -412,7 +420,33 @@
       drawText(text, textX, baseline, size, 800, "left");
     }
 
+    function getLocationPinWidth(height) {
+      const aspect = locationPinReady && locationPinImage.naturalHeight
+        ? locationPinImage.naturalWidth / locationPinImage.naturalHeight
+        : 0.57;
+      return height * aspect;
+    }
+
+    function drawLocationPinImage(x, y, width, height) {
+      if (!locationPinReady) return false;
+
+      ctx.save();
+      ctx.shadowColor = `rgba(0, 0, 0, ${Number(controls.shadowStrength.value) / 100})`;
+      ctx.shadowBlur = Math.max(2, height * 0.08);
+      ctx.shadowOffsetX = Math.max(1, height * 0.025);
+      ctx.shadowOffsetY = Math.max(1, height * 0.035);
+      ctx.drawImage(locationPinImage, x, y, width, height);
+      ctx.restore();
+      return true;
+    }
+
     function drawLocationPin(x, baseline, size) {
+      const height = size * 1.25;
+      const width = getLocationPinWidth(height);
+      if (drawLocationPinImage(x, baseline - height * 0.98, width, height)) {
+        return;
+      }
+
       const cx = x + size * 0.42;
       const cy = baseline - size * 0.58;
 
@@ -435,6 +469,12 @@
     }
 
     function drawRedLocationPin(x, centerY, size) {
+      const height = size;
+      const width = getLocationPinWidth(height);
+      if (drawLocationPinImage(x, centerY - height / 2, width, height)) {
+        return;
+      }
+
       const cx = x + size * 0.5;
       const cy = centerY - size * 0.12;
       const shadowAlpha = Number(controls.shadowStrength.value) / 100;
@@ -559,8 +599,9 @@
       );
       const textHeight = ascent + descent;
       const gap = 22 * scale;
-      const pinSize = 30 * scale;
-      const totalWidth = dateMetrics.width + gap + weekMetrics.width + gap + pinSize + 8 * scale + locationMetrics.width;
+      const pinSize = 34 * scale;
+      const pinWidth = getLocationPinWidth(pinSize);
+      const totalWidth = dateMetrics.width + gap + weekMetrics.width + gap + pinWidth + 8 * scale + locationMetrics.width;
       ctx.restore();
 
       let x = centerX - totalWidth / 2;
@@ -570,7 +611,7 @@
       drawText(weekValue, x, baseline, fontSize, 400, "left");
       x += weekMetrics.width + gap;
       drawRedLocationPin(x, topY + textHeight / 2, pinSize);
-      x += pinSize + 8 * scale;
+      x += pinWidth + 8 * scale;
       drawText(locationValue, x, baseline, fontSize, 400, "left");
     }
 
@@ -664,8 +705,10 @@
       drawText(meta, infoX, timeBottom - metaDescent, metaSize, 700);
 
       const pinSize = 31 * s;
+      const pinHeight = pinSize * 1.25;
+      const pinWidth = getLocationPinWidth(pinHeight);
       drawLocationPin(x, locationY, pinSize);
-      drawText(controls.locationText.value.trim() || "桂林市象山区 · 广西壮族自治区南溪山医院", x + 35 * s, locationY, locationSize, 700);
+      drawText(controls.locationText.value.trim() || "桂林市象山区 · 广西壮族自治区南溪山医院", x + pinWidth + 12 * s, locationY, locationSize, 700);
 
       const rightX = canvas.width - 14 * s * m;
       const rightBottom = canvas.height - 48 * s * m;
