@@ -441,9 +441,9 @@
     }
 
     function drawLocationPin(x, baseline, size) {
-      const height = size * 1.75;
+      const height = size;
       const width = getLocationPinWidth(height);
-      if (drawLocationPinImage(x, baseline - height * 0.92, width, height)) {
+      if (drawLocationPinImage(x, baseline - height * 0.98, width, height)) {
         return;
       }
 
@@ -469,9 +469,9 @@
     }
 
     function drawRedLocationPin(x, centerY, size) {
-      const height = size * 1.9;
+      const height = size;
       const width = getLocationPinWidth(height);
-      if (drawLocationPinImage(x, centerY - height * 0.34, width, height)) {
+      if (drawLocationPinImage(x, centerY - height / 2, width, height)) {
         return;
       }
 
@@ -599,8 +599,7 @@
       );
       const textHeight = ascent + descent;
       const gap = 22 * scale;
-      const pinSize = 34 * scale;
-      const pinHeight = pinSize * 1.9;
+      const pinHeight = textHeight;
       const pinWidth = getLocationPinWidth(pinHeight);
       const totalWidth = dateMetrics.width + gap + weekMetrics.width + gap + pinWidth + 8 * scale + locationMetrics.width;
       ctx.restore();
@@ -611,7 +610,7 @@
       x += dateMetrics.width + gap;
       drawText(weekValue, x, baseline, fontSize, 400, "left");
       x += weekMetrics.width + gap;
-      drawRedLocationPin(x, topY + textHeight / 2, pinSize);
+      drawRedLocationPin(x, topY + textHeight / 2, pinHeight);
       x += pinWidth + 8 * scale;
       drawText(locationValue, x, baseline, fontSize, 400, "left");
     }
@@ -705,10 +704,9 @@
       ctx.restore();
       drawText(meta, infoX, timeBottom - metaDescent, metaSize, 700);
 
-      const pinSize = 31 * s;
-      const pinHeight = pinSize * 1.75;
+      const pinHeight = locationSize;
       const pinWidth = getLocationPinWidth(pinHeight);
-      drawLocationPin(x, locationY, pinSize);
+      drawLocationPin(x, locationY, pinHeight);
       drawText(controls.locationText.value.trim() || "桂林市象山区 · 广西壮族自治区南溪山医院", x + pinWidth + 12 * s, locationY, locationSize, 700);
 
       const rightX = canvas.width - 14 * s * m;
