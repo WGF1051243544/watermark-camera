@@ -431,10 +431,10 @@
       if (!locationPinReady) return false;
 
       ctx.save();
-      ctx.shadowColor = `rgba(0, 0, 0, ${Number(controls.shadowStrength.value) / 100})`;
-      ctx.shadowBlur = Math.max(2, height * 0.08);
-      ctx.shadowOffsetX = Math.max(1, height * 0.025);
-      ctx.shadowOffsetY = Math.max(1, height * 0.035);
+      ctx.shadowColor = `rgba(0, 0, 0, ${(Number(controls.shadowStrength.value) / 100) * 0.28})`;
+      ctx.shadowBlur = Math.max(1, height * 0.035);
+      ctx.shadowOffsetX = Math.max(0.5, height * 0.012);
+      ctx.shadowOffsetY = Math.max(0.5, height * 0.016);
       ctx.drawImage(locationPinImage, x, y, width, height);
       ctx.restore();
       return true;
@@ -599,7 +599,7 @@
       );
       const textHeight = ascent + descent;
       const gap = 22 * scale;
-      const pinHeight = textHeight;
+      const pinHeight = textHeight * 0.72;
       const pinWidth = getLocationPinWidth(pinHeight);
       const totalWidth = dateMetrics.width + gap + weekMetrics.width + gap + pinWidth + 8 * scale + locationMetrics.width;
       ctx.restore();
@@ -704,7 +704,7 @@
       ctx.restore();
       drawText(meta, infoX, timeBottom - metaDescent, metaSize, 700);
 
-      const pinHeight = locationSize;
+      const pinHeight = locationSize * 0.72;
       const pinWidth = getLocationPinWidth(pinHeight);
       drawLocationPin(x, locationY, pinHeight);
       drawText(controls.locationText.value.trim() || "桂林市象山区 · 广西壮族自治区南溪山医院", x + pinWidth + 12 * s, locationY, locationSize, 700);
