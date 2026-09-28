@@ -272,6 +272,8 @@
             <input id="weatherText" type="text" value="晴 32°C" autocomplete="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
+        <label for="nameText">姓名</label>
+        <input id="nameText" type="text" value="郭睿" autocomplete="off" autocapitalize="off" spellcheck="false">
         <label for="locationText">地点</label>
         <input id="locationText" value="桂林市象山区 · 广西壮族自治区南溪山医院">
         <button id="detectLocationButton" class="secondary" type="button">自动识别地址</button>
@@ -284,6 +286,7 @@
         <select id="templateSelect">
           <option value="classic">左下角经典模板</option>
           <option value="center">居中简洁模板</option>
+          <option value="corner">对角信息模板</option>
         </select>
 
         <label for="fontScale">字号比例</label>
@@ -314,7 +317,7 @@
             <input id="qualityInput" type="number" min="60" max="100" value="95">
           </div>
         </div>
-        <p class="notice">水印内容由本地手动填写。右下角显示相机图标和“水印相机”。</p>
+        <p class="notice">水印内容由本地手动填写。经典/居中模板右下角显示相机图标和“水印相机”；对角信息模板按设计显示姓名与地点，不显示品牌字。</p>
       </div>
     </section>
 
@@ -339,6 +342,7 @@
       dateText: document.getElementById("dateText"),
       weekText: document.getElementById("weekText"),
       weatherText: document.getElementById("weatherText"),
+      nameText: document.getElementById("nameText"),
       locationText: document.getElementById("locationText"),
       templateSelect: document.getElementById("templateSelect"),
       fontScale: document.getElementById("fontScale"),
@@ -535,6 +539,153 @@
       ctx.restore();
     }
 
+    function drawPersonIcon(x, centerY, size) {
+      const cx = x + size * 0.5;
+      const headR = size * 0.22;
+      const headCy = centerY - size * 0.22;
+      const shadowAlpha = Number(controls.shadowStrength.value) / 100;
+
+      ctx.save();
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = `rgba(0, 0, 0, ${shadowAlpha})`;
+      ctx.shadowBlur = Math.max(4, size * 0.12);
+      ctx.shadowOffsetX = Math.max(1, size * 0.025);
+      ctx.shadowOffsetY = Math.max(1, size * 0.035);
+      ctx.beginPath();
+      ctx.arc(cx, headCy, headR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - size * 0.42, centerY + size * 0.48);
+      ctx.quadraticCurveTo(cx - size * 0.40, centerY + size * 0.02, cx - size * 0.18, centerY - size * 0.02);
+      ctx.quadraticCurveTo(cx, centerY + size * 0.08, cx + size * 0.18, centerY - size * 0.02);
+      ctx.quadraticCurveTo(cx + size * 0.40, centerY + size * 0.02, cx + size * 0.42, centerY + size * 0.48);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function formatDottedDate(dateValue) {
+      const match = String(dateValue || "").trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (!match) return String(dateValue || "").replace(/-/g, ".");
+      return `${match[1]}.${match[2].padStart(2, "0")}.${match[3].padStart(2, "0")}`;
+    }
+
+    function drawRightAlignedIconText(rightX, baseline, text, fontSize, weight, iconSize, gap, drawIcon) {
+      ctx.save();
+      ctx.font = `${weight} ${fontSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const metrics = ctx.measureText(text);
+      const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.82;
+      const descent = metrics.actualBoundingBoxDescent || fontSize * 0.18;
+      const textHeight = ascent + descent;
+      ctx.restore();
+
+      const textX = rightX - metrics.width;
+      const iconX = textX - gap - iconSize;
+      const iconCenterY = baseline - ascent + textHeight / 2;
+      drawIcon(iconX, iconCenterY, iconSize);
+      drawText(text, textX, baseline, fontSize, weight, "left");
+      return textHeight;
+    }
+
+    function drawCornerWatermark() {
+      const s = getScale();
+      const m = getMarginScale();
+      const left = 46 * s * m;
+      const top = 46 * s * m;
+      const right = canvas.width - 46 * s * m;
+      const bottom = canvas.height - 46 * s * m;
+
+      const timeText = controls.timeText.value.trim() || "15:27";
+      const dateText = formatDottedDate(controls.dateText.value.trim() || "2026-05-08");
+      const weekTextValue = controls.weekText.value.trim() || "星期五";
+      const dateLine = `${dateText} ${weekTextValue}`;
+      const nameText = controls.nameText.value.trim() || "郭睿";
+      const locationValue = controls.locationText.value.trim() || "吉林省吉林市 · 吉林医药学院附属医院";
+
+      const timeSize = 88 * s;
+      const dateSize = 33 * s;
+      const nameSize = 34 * s;
+      const locationSize = 34 * s;
+      const lineWidth = Math.max(3, 4 * s);
+      const lineGap = 18 * s;
+
+      ctx.save();
+      ctx.font = `700 ${timeSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const timeMetrics = ctx.measureText(timeText);
+      const timeAscent = timeMetrics.actualBoundingBoxAscent || timeSize * 0.82;
+      const timeDescent = timeMetrics.actualBoundingBoxDescent || timeSize * 0.18;
+      ctx.restore();
+
+      ctx.save();
+      ctx.font = `500 ${dateSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const dateMetrics = ctx.measureText(dateLine);
+      const dateAscent = dateMetrics.actualBoundingBoxAscent || dateSize * 0.82;
+      const dateDescent = dateMetrics.actualBoundingBoxDescent || dateSize * 0.18;
+      ctx.restore();
+
+      const timeBaseline = top + timeAscent;
+      const dateBaseline = timeBaseline + timeDescent + 14 * s + dateAscent;
+      const textX = left + lineWidth + lineGap;
+      const lineTop = timeBaseline - timeAscent;
+      const lineBottom = dateBaseline + dateDescent;
+      const shadowAlpha = Number(controls.shadowStrength.value) / 100;
+
+      ctx.save();
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = `rgba(0, 0, 0, ${shadowAlpha})`;
+      ctx.shadowBlur = Math.max(4, timeSize * 0.08);
+      ctx.shadowOffsetX = Math.max(1, timeSize * 0.02);
+      ctx.shadowOffsetY = Math.max(1, timeSize * 0.03);
+      ctx.fillRect(left, lineTop, lineWidth, lineBottom - lineTop);
+      ctx.restore();
+
+      drawText(timeText, textX, timeBaseline, timeSize, 700, "left");
+      drawText(dateLine, textX, dateBaseline, dateSize, 500, "left");
+
+      const locationIconSize = 31 * s;
+      const nameIconSize = 34 * s;
+      const iconTextGap = 10 * s;
+
+      ctx.save();
+      ctx.font = `600 ${locationSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const locationMetrics = ctx.measureText(locationValue);
+      const locationAscent = locationMetrics.actualBoundingBoxAscent || locationSize * 0.82;
+      const locationDescent = locationMetrics.actualBoundingBoxDescent || locationSize * 0.18;
+      ctx.restore();
+
+      const locationBaseline = bottom - locationDescent;
+      drawRightAlignedIconText(
+        right,
+        locationBaseline,
+        locationValue,
+        locationSize,
+        600,
+        locationIconSize,
+        iconTextGap,
+        (iconX, iconCenterY, iconSize) => drawLocationPin(iconX, iconCenterY + iconSize * 0.58, iconSize)
+      );
+
+      ctx.save();
+      ctx.font = `600 ${nameSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif`;
+      const nameMetrics = ctx.measureText(nameText);
+      const nameAscent = nameMetrics.actualBoundingBoxAscent || nameSize * 0.82;
+      const nameDescent = nameMetrics.actualBoundingBoxDescent || nameSize * 0.18;
+      ctx.restore();
+
+      const nameBaseline = locationBaseline - locationAscent - 18 * s - nameDescent;
+      drawRightAlignedIconText(
+        right,
+        nameBaseline,
+        nameText,
+        nameSize,
+        600,
+        nameIconSize,
+        iconTextGap,
+        drawPersonIcon
+      );
+    }
+
     function roundRectPath(context, x, y, width, height, radius) {
       const r = Math.min(radius, width / 2, height / 2);
       context.beginPath();
@@ -643,6 +794,11 @@
 
       if (controls.templateSelect && controls.templateSelect.value === "center") {
         drawCenteredWatermark();
+        return;
+      }
+
+      if (controls.templateSelect && controls.templateSelect.value === "corner") {
+        drawCornerWatermark();
         return;
       }
 
